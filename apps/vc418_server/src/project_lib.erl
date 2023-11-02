@@ -1,6 +1,10 @@
 -module(project_lib).
--include_lib("eunit/include/eunit.hrl").
+
 -export([create/2, child_pids/1, parent_pid/1, proc_index/1, plus_fun/0]).
+-export([swap_data_with_master/2, swap_data_with_tree/2]).
+-export([close/2]).
+
+-include_lib("eunit/include/eunit.hrl").
 
 %% helper functions
 plus_fun() -> fun(X, Y) -> X + Y end.
@@ -36,3 +40,76 @@ create(N, Parent, MyIndex, ChildPids, Task) when is_integer(N), 1 < N ->
                     create(NRight, MyPid, MyIndex + NLeft, [], Task)
                    end),
   create(NLeft, Parent, MyIndex, [RightPid | ChildPids], Task).
+
+
+% swap_data_with_master(ProcInfo, UpData) -> DownData
+%   called by worker processes.
+%   Parameters:
+%     ProcInfo is the ProcInfo object for the process (doh!)
+%     UpData is our data to send to the master process.
+%   Return Value:
+%     DownData: our data from the master process.
+%   Note: the master process will receive a list of UpData values, with
+%     one element per worker process, in order of their process indices.
+%     The master process provides a list of new data values, with one
+%     element per worker process.  Each worker receives the DownData value
+%     corresponding to its position in this list.
+swap_data_with_master(ProcInfo, UpData) ->
+  swap_data_with_master(parent_pid(ProcInfo), child_pids(ProcInfo), {UpData}).
+
+swap_data_with_master({MasterPid}, [], UpData) ->
+  MasterPid ! {self(), data_up, UpData},
+  receive
+    {MasterPid, data_down, DownData} -> DownData
+  end;
+swap_data_with_master(ParentPid, [], UpData) ->
+  ParentPid ! {self(), data_up, UpData},
+  receive
+    {ParentPid, data_down, DownData} -> DownData
+  end;
+swap_data_with_master(Parent, [ChildHd | ChildTl], LeftUp) ->
+  receive
+    {ChildHd, data_up, RightUp} ->
+      [LeftDown, RightDown] =
+        swap_data_with_master(Parent, ChildTl, [LeftUp, RightUp]),
+      ChildHd ! {self(), data_down, RightDown},
+      LeftDown
+  end.
+
+swap_data_with_tree(RootPid, ListDown) ->
+  receive
+    {RootPid, data_up, DataUp} ->
+      try
+        case swap_magic(DataUp, [], ListDown) of
+          {DataDown, ListUpRev, []} ->
+            RootPid ! {self(), data_down, DataDown},
+            lists:reverse(ListUpRev);
+          _ -> io:format("swap_data_with_tree: too many values in ListDown" ++
+          "  length(ListDown) = ~w, should be ~w~n",
+            [length(ListDown), length(lists:flatten(DataUp))]),
+            error(bad_arg)
+        end
+      catch error:not_enough_data ->
+        io:format("swap_data_with_tree: not enough values in ListDown" ++
+        "  length(ListDown) = ~w, should be ~w~n",
+          [length(ListDown), length(lists:flatten(DataUp))]),
+        error(bad_arg)
+      end
+  end.
+
+swap_magic({Leaf1}, Rev1, [Hd2 | Tl2]) ->
+  {Hd2, [Leaf1 | Rev1], Tl2};
+swap_magic(_, _, []) ->
+  error(not_enough_data);
+swap_magic([L1, R1], Rev1, List2) ->
+  {NewL1, Rev1a, List2a} = swap_magic(L1, Rev1, List2),
+  {NewR1, Rev1b, List2b} = swap_magic(R1, Rev1a, List2a),
+  {[NewL1, NewR1], Rev1b, List2b}.
+
+close(X, X) -> true;
+close(Expected, Actual) when is_number(Expected), is_number(Actual) ->
+  abs(Actual - Expected) < 1.0e-8 * max(abs(Expected), 1);
+close([HdExpected | TlExpected], [HdActual | TlActual]) ->
+  close(HdExpected, HdActual) andalso
+    close(TlExpected, TlActual);
+close(_, _) -> false.

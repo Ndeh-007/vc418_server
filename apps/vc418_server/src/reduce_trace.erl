@@ -11,9 +11,6 @@ start(NProcs) ->
     % textbook Lin and Snyder.
 
     MasterPid = self(),
-    % {ok, CurrentDirectory} = file:get_cwd(),
-    % SaveFileName = filename:join(CurrentDirectory, "events.txt"),
-
 
     % instantiate the collector
     CollectorOptions = [
@@ -45,11 +42,15 @@ start(NProcs) ->
     et_collector:report_event(CollectorPid, 80, watcher, watcher, "Event collection ended", [{action, null}, {value, V}]),
     % et_collector:save_event_file(CollectorPid, SaveFileName, [existing, write, keep]),
     % get data from the collector
-    CollectorData = et_collector:iterate(CollectorPid, first, infinity, fun(Event, Acc)-> [Event|Acc] end, []),
+    CollectorData = et_collector:iterate(CollectorPid, first, infinity, pre_json_encode_events(), []),
 
     %% return the path to the file to which all traces where stored
-    CollectorData.
+    lists:reverse(CollectorData).
 
+
+%% ===============
+%  Worker function
+%% ===============
 
 % Lin & Snyder style reduce:
 %   called by the leaves.
@@ -91,5 +92,41 @@ reduce(Parent, [ChildHd | ChildTl], CombineFun, LeftTotal, CollectorPid) ->
     end.
 
     
-%% helper functions
+%% ===============
+% Helper functions
+%% ==============
+
+
+% Add Function
 plus_fun() -> fun(X, Y) -> X + Y end.
+
+%%
+% helper function for getting the data ready for encoding in and sending the request
+% 
+pre_json_encode_events() -> 
+    fun(Event, Acc) ->
+
+        {Type, Priority, _, _, From, To, Msg, Data} = Event,
+        
+        %% Type => atom
+        %% Priority => integer
+        %% From => atom
+        %% To => atom
+        %% Msg => string
+        %% Data => List of tuples: [..., {Key, Value}, ...]
+        %%          where Key => atom
+        %%                Value => integer or atom
+
+        % create a json encoded instance
+
+        Instance = [
+            {<<"type">>, Type},
+            {<<"priority">>, Priority},
+            {<<"from">>, From},
+            {<<"to">>, To},
+            {<<"msg">>, Msg},
+            {<<"data">>, Data}
+        ],
+
+        [Instance | Acc]
+    end.

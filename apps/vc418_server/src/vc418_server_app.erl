@@ -15,7 +15,8 @@ start(_StartType, _StartArgs) ->
             <<"localhost">>,
             [
                 { <<"/">>, hello_handler, [] },
-                { <<"/reduce">>, reduce_handler,[]}
+                { <<"/reduce">>, reduce_handler,[]},
+                { <<"/scan">>, scan_handler,[]}
             ]
         } 
     ]),
