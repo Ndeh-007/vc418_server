@@ -124,7 +124,7 @@ pre_json_encode_events() ->
             {<<"priority">>, Priority},
             {<<"from">>, From},
             {<<"to">>, To},
-            {<<"msg">>, Msg},
+            {<<"msg">>, list_to_binary(Msg)},
             {<<"data">>, Data}
         ],
 
