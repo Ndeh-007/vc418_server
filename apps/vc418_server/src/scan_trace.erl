@@ -44,6 +44,7 @@ start(NProcs) ->
 %  Worker function
 %% ===============
 scan(ProcInfo, CombineFun, AccIn, Value, CollectorPid) ->
+    et_collector:report_event(CollectorPid, 80, watcher, watcher, "Start. Before first call.", [{action, start}, {left_total, Value}, {my_total, Value}, {acc, AccIn}]),
     scan(project_lib:parent_pid(ProcInfo), project_lib:child_pids(ProcInfo), CombineFun, AccIn, Value, CollectorPid).
 
 scan({_}, [], _, AccIn, _, CollectorPid) -> 
@@ -52,7 +53,6 @@ scan({_}, [], _, AccIn, _, CollectorPid) ->
 scan(ParentPid, [], _, _, MyTotal, CollectorPid) ->
     et_collector:report_event(CollectorPid, 80, ParentPid, self(), "At the leaf", [{action, null}, {left_total, MyTotal}, {my_total, MyTotal}, {acc, null}]),
     ParentPid ! {self(), send_up, MyTotal},
-    et_collector:report_event(CollectorPid, 80, self(), ParentPid, "At the leaf, sent data to parent", [{action, null}, {left_total, MyTotal}, {my_total, MyTotal}, {acc, null}]),
     receive 
         {ParentPid, send_down, GrandTotal} ->
             et_collector:report_event(CollectorPid, 80, self(), ParentPid, "At the leaf, received data from parent with action", [{action, send_down}, {left_total, MyTotal}, {my_total, MyTotal}, {acc, GrandTotal}]),
@@ -62,9 +62,7 @@ scan(Parent, [ChildHd | ChildTl], CombineFun, AccIn, LeftTotal, CollectorPid) ->
     et_collector:report_event(CollectorPid, 80, Parent, self(), "Inside tree going down", [{action, null}, {left_total, LeftTotal}, {my_total, LeftTotal}, {acc, AccIn}]),
     receive
         {ChildHd, send_up, RightTotal} -> 
-
             et_collector:report_event(CollectorPid, 80, ChildHd, self(), "Inside tree received data", [{action, send_up}, {left_total, LeftTotal}, {my_total, RightTotal}, {acc, AccIn}]),
-            
             GrandTotal = scan(Parent, ChildTl, CombineFun, AccIn, CombineFun(LeftTotal,RightTotal), CollectorPid),
             ChildHd ! {self(), send_down, CombineFun(LeftTotal, GrandTotal)},
             GrandTotal
@@ -87,13 +85,15 @@ plus_fun() ->
 pre_json_encode_events() -> 
     fun(Event, Acc) ->
 
-        {Type, Priority, _, _, From, To, Msg, Data} = Event,
+        {Type, Priority, STime, RTime, From, To, Msg, Data} = Event,
         
         % create a json encoded instance
 
         Instance = [
             {<<"type">>, Type},
             {<<"priority">>, Priority},
+            {<<"send_time">>, STime},
+            {<<"receive_time">>, RTime},
             {<<"from">>, From},
             {<<"to">>, To},
             {<<"msg">>, list_to_binary(Msg)},

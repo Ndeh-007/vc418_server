@@ -56,6 +56,7 @@ start(NProcs) ->
 %   called by the leaves.
 %   returns the GrandTotal to each leaf.
 reduce(ProcInfo, CombineFun, Value, CollectorPid) ->
+    et_collector:report_event(CollectorPid, 80, watcher, watcher, "Start. Before first call.", [{action, start}, {my_total, Value}, {acc, null}]),
     reduce(project_lib:parent_pid(ProcInfo), project_lib:child_pids(ProcInfo), CombineFun, Value, CollectorPid).
 
 reduce({_}, [], _, GrandTotal, CollectorPid) -> 
@@ -66,7 +67,6 @@ reduce(ParentPid, [], _, MyTotal, CollectorPid) ->
     % signal that we are at the leaves of each tree
     et_collector:report_event(CollectorPid, 80, ParentPid, self(), "At the leaf", [{action, null}, {value, MyTotal}]),
     ParentPid ! {self(), reduce_up, MyTotal},
-    et_collector:report_event(CollectorPid, 80, self(), ParentPid, "At the leaf, sent data to parent", [{action, reduce_up}, {value, MyTotal}]),
     receive
         {ParentPid, reduce_down, GrandTotal} ->
             % signal that at the leaves we have received a value from our parent
@@ -85,7 +85,6 @@ reduce(Parent, [ChildHd | ChildTl], CombineFun, LeftTotal, CollectorPid) ->
             GrandTotal = reduce(Parent, ChildTl, CombineFun, CombineFun(LeftTotal, RightTotal), CollectorPid),
             
             % signal that we have sent data to a child
-            et_collector:report_event(CollectorPid, 80, self(), ChildHd, "At node, sent grand total to child", [{action, reduce_down}, {value, GrandTotal}]),
             ChildHd ! {self(), reduce_down, GrandTotal},
             
             GrandTotal
@@ -106,7 +105,7 @@ plus_fun() -> fun(X, Y) -> X + Y end.
 pre_json_encode_events() -> 
     fun(Event, Acc) ->
 
-        {Type, Priority, _, _, From, To, Msg, Data} = Event,
+        {Type, Priority, STime, RTime, From, To, Msg, Data} = Event,
         
         %% Type => atom
         %% Priority => integer
@@ -122,6 +121,8 @@ pre_json_encode_events() ->
         Instance = [
             {<<"type">>, Type},
             {<<"priority">>, Priority},
+            {<<"send_time">>, STime},
+            {<<"receive_time">>, RTime},
             {<<"from">>, From},
             {<<"to">>, To},
             {<<"msg">>, list_to_binary(Msg)},
