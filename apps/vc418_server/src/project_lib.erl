@@ -1,6 +1,6 @@
 -module(project_lib).
 
--export([create/2, child_pids/1, parent_pid/1, proc_index/1, plus_fun/0]).
+-export([create/2, child_pids/1, parent_pid/1, proc_index/1, plus_fun/0, get_as_milliseconds/1]).
 -export([swap_data_with_master/2, swap_data_with_tree/2]).
 -export([close/2]).
 
@@ -113,3 +113,7 @@ close([HdExpected | TlExpected], [HdActual | TlActual]) ->
   close(HdExpected, HdActual) andalso
     close(TlExpected, TlActual);
 close(_, _) -> false.
+
+
+get_as_milliseconds({MegaSecs, Secs, MicroSecs}) ->
+  MegaSecs * 1000000 * 1000 + Secs * 1000 + MicroSecs.

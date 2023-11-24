@@ -38,9 +38,6 @@ start(NProcs) ->
     
     ?assertEqual(lists:sum(lists:seq(1, NProcs)), V),
 
-    % signal the end of the collection to the collector
-    et_collector:report_event(CollectorPid, 80, watcher, watcher, "Event collection ended", [{action, null}, {value, V}]),
-    % et_collector:save_event_file(CollectorPid, SaveFileName, [existing, write, keep]),
     % get data from the collector
     CollectorData = et_collector:iterate(CollectorPid, first, infinity, pre_json_encode_events(), []),
 
@@ -121,8 +118,8 @@ pre_json_encode_events() ->
         Instance = [
             {<<"type">>, Type},
             {<<"priority">>, Priority},
-            {<<"send_time">>, STime},
-            {<<"receive_time">>, RTime},
+            {<<"send_time">>, project_lib:get_as_milliseconds(STime)},
+            {<<"receive_time">>, project_lib:get_as_milliseconds(RTime)},
             {<<"from">>, From},
             {<<"to">>, To},
             {<<"msg">>, list_to_binary(Msg)},

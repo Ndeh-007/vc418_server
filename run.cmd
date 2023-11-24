@@ -1,0 +1,1 @@
+rebar3 compile && rebar3 shell --apps vc418_server
