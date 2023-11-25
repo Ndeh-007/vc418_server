@@ -23,23 +23,28 @@ child_pids({_, CPids, _}) -> CPids.
 parent_pid({PPid, _, _}) -> PPid.
 proc_index({_, _, I}) -> I.
 
-% create(NProcs, Task) -> RootPid
+% create(NProcs, Task) -> {RootPid, Tree:{list of {parentPid, childPids} }}
 %   RootPid is the pid for the process at the root of the tree.
 create(NProcs, Task)
   when is_integer(NProcs), 0 < NProcs, is_function(Task, 1) ->
   MyPid = self(),
-  spawn(fun() -> create(NProcs, {MyPid}, 1, [], Task) end).
+  spawn(fun() -> create(NProcs, {MyPid}, 1, [], Task, [], MyPid) end),
+  receive
+    Tree -> {MyPid, Tree}
+    after 1000 -> time_out
+  end.
 
-create(1, Parent, MyIndex, ChildPids, Task) ->
+create(1, Parent, MyIndex, ChildPids, Task, Tree, RootPid) ->
+  RootPid ! [{Parent, ChildPids} | Tree],
   Task({Parent, ChildPids, MyIndex});
-create(N, Parent, MyIndex, ChildPids, Task) when is_integer(N), 1 < N ->
+create(N, Parent, MyIndex, ChildPids, Task, Tree, RootPid) when is_integer(N), 1 < N ->
   NLeft = N div 2,
   NRight = N - NLeft,
   MyPid = self(),
   RightPid = spawn(fun() ->
-                    create(NRight, MyPid, MyIndex + NLeft, [], Task)
+                    create(NRight, MyPid, MyIndex + NLeft, [], Task, [{MyPid, []} | Tree], RootPid)
                    end),
-  create(NLeft, Parent, MyIndex, [RightPid | ChildPids], Task).
+  create(NLeft, Parent, MyIndex, [RightPid | ChildPids], Task, [{Parent, [RightPid | ChildPids]} | Tree], RootPid).
 
 
 % swap_data_with_master(ProcInfo, UpData) -> DownData

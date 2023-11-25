@@ -20,7 +20,7 @@ start(NProcs) ->
     ],
     {ok, CollectorPid} = et_collector:start_link(CollectorOptions),
 
-    project_lib:create(
+    {RootPid, Tree} = project_lib:create(
         NProcs,
         fun(ProcInfo) -> 
             I = project_lib:proc_index(ProcInfo),
@@ -42,7 +42,16 @@ start(NProcs) ->
     CollectorData = et_collector:iterate(CollectorPid, first, infinity, pre_json_encode_events(), []),
 
     %% return the path to the file to which all traces where stored
-    lists:reverse(CollectorData).
+    Events = lists:reverse(CollectorData),
+
+    % return the json object of the tree data and all the events collected
+    % {
+        [   
+            {<<"nprocs">>, NProcs},
+            {<<"tree">>, Tree}
+            % {<<"events">>, Events}
+        ].
+    % }.
 
 
 %% ===============
@@ -53,12 +62,11 @@ start(NProcs) ->
 %   called by the leaves.
 %   returns the GrandTotal to each leaf.
 reduce(ProcInfo, CombineFun, Value, CollectorPid) ->
-    et_collector:report_event(CollectorPid, 80, watcher, watcher, "Start. Before first call.", [{action, start}, {my_total, Value}, {acc, null}]),
     reduce(project_lib:parent_pid(ProcInfo), project_lib:child_pids(ProcInfo), CombineFun, Value, CollectorPid).
 
 reduce({_}, [], _, GrandTotal, CollectorPid) -> 
     % signal that we are the top of the tree and and we are returning the last value
-    et_collector:report_event(CollectorPid, 80, head, head, "At top of tree, returning grand total", [{action, null}, {value, GrandTotal}]),
+    et_collector:report_event(CollectorPid, 80, self(), self(), "At top of tree, returning grand total", [{action, null}, {value, GrandTotal}]),
     GrandTotal;
 reduce(ParentPid, [], _, MyTotal, CollectorPid) ->
     % signal that we are at the leaves of each tree
@@ -78,7 +86,7 @@ reduce(Parent, [ChildHd | ChildTl], CombineFun, LeftTotal, CollectorPid) ->
     receive
         {ChildHd, reduce_up, RightTotal} ->
             % signal that we have received data from a child
-            et_collector:report_event(CollectorPid, 80, ChildHd, self(), "At node, receive right total from child", [{action, null}, {value, RightTotal}]),
+            et_collector:report_event(CollectorPid, 80, ChildHd, self(), "At node, receive right total from child", [{action, reduce_up}, {value, RightTotal}]),
             GrandTotal = reduce(Parent, ChildTl, CombineFun, CombineFun(LeftTotal, RightTotal), CollectorPid),
             
             % signal that we have sent data to a child
