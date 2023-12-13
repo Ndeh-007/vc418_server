@@ -1,6 +1,6 @@
 -module(project_lib).
 
--export([create/2, child_pids/1, parent_pid/1, proc_index/1, plus_fun/0, get_as_milliseconds/1]).
+-export([create/2, child_pids/1, parent_pid/1, proc_index/1, plus_fun/0, get_as_milliseconds/1, encoded_json_tree/2]).
 -export([swap_data_with_master/2, swap_data_with_tree/2]).
 -export([close/2]).
 
@@ -28,19 +28,39 @@ proc_index({_, _, I}) -> I.
 create(NProcs, Task)
   when is_integer(NProcs), 0 < NProcs, is_function(Task, 1) ->
   MyPid = self(),
-  spawn(fun() -> create(NProcs, {MyPid}, 1, [], Task) end).
+  MasterPid = self(),
+  RootPid = spawn(fun() -> create(NProcs, {MyPid}, 1, [], Task, MasterPid) end),
+  ProcTree = loop_create([], NProcs),
+  {RootPid, ProcTree}.
 
-create(1, Parent, MyIndex, ChildPids, Task) ->
+create(1, Parent, MyIndex, ChildPids, Task, MasterPid) ->
+  MasterPid ! {proc_state, {Parent, self(), ChildPids, MyIndex}},
   Task({Parent, ChildPids, MyIndex});
-create(N, Parent, MyIndex, ChildPids, Task) when is_integer(N), 1 < N ->
+create(N, Parent, MyIndex, ChildPids, Task, MasterPid) when is_integer(N), 1 < N ->
   NLeft = N div 2,
   NRight = N - NLeft,
   MyPid = self(),
   RightPid = spawn(fun() ->
-                    create(NRight, MyPid, MyIndex + NLeft, [], Task)
+                    create(NRight, MyPid, MyIndex + NLeft, [], Task, MasterPid)
                    end),
-  create(NLeft, Parent, MyIndex, [RightPid | ChildPids], Task).
+  create(NLeft, Parent, MyIndex, [RightPid | ChildPids], Task, MasterPid).
 
+loop_create(Acc, NProcs) when length(Acc) == NProcs -> Acc; 
+loop_create(Acc, NProcs) ->
+  receive
+    {proc_state, ProcInfo} -> 
+      loop_create([ProcInfo | Acc], NProcs) 
+  end.
+
+encoded_json_tree([], Acc) -> Acc;
+encoded_json_tree([{Parent, Self, Children, Index} | TreeListTl], Acc)->
+  Instance = [
+    {<<"self">>, Self},
+    {<<"parent">>, Parent},
+    {<<"children">>, Children},
+    {<<"value">>, Index}
+  ],
+  encoded_json_tree(TreeListTl, [Instance | Acc]).
 
 % swap_data_with_master(ProcInfo, UpData) -> DownData
 %   called by worker processes.

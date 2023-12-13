@@ -18,7 +18,7 @@ start(NProcs) ->
     ConcatFun = fun(X, Y) -> X ++ Y end,
 
     % create processes and instantiate the scan.
-    RootPid = project_lib:create(NProcs,
+    {RootPid, Tree} = project_lib:create(NProcs,
       fun(ProcInfo) ->
         I = scan(ProcInfo, plus_fun(), 0, 1, CollectorPid),
         project_lib:swap_data_with_master(ProcInfo, I),
@@ -34,18 +34,24 @@ start(NProcs) ->
     CollectorData = et_collector:iterate(CollectorPid, first, infinity, pre_json_encode_events(), []),
 
     %% return the path to the file to which all traces where stored
-    lists:reverse(CollectorData).
+    Events = lists:reverse(CollectorData),
+    EncodedTree = project_lib:encoded_json_tree(Tree, []),
+    {[ 
+        {<<"nprocs">>, NProcs},
+        {<<"program">>, list_to_binary("scan")},
+        {<<"tree">>, EncodedTree},
+        {<<"data">>, Events}
+    ]}.
+
 
 
 %% ===============
 %  Worker function
 %% ===============
 scan(ProcInfo, CombineFun, AccIn, Value, CollectorPid) ->
-    et_collector:report_event(CollectorPid, 80, watcher, watcher, "Start. Before first call.", [{action, start}, {left_total, Value}, {my_total, Value}, {acc, AccIn}]),
     scan(project_lib:parent_pid(ProcInfo), project_lib:child_pids(ProcInfo), CombineFun, AccIn, Value, CollectorPid).
 
-scan({_}, [], _, AccIn, _, CollectorPid) -> 
-    et_collector:report_event(CollectorPid, 80, head, head, "At top of tree, returning Accumulator", [{action, null}, {left_total, null}, {my_total, null}, {acc, AccIn}]),
+scan({_}, [], _, AccIn, _, _) -> 
     AccIn;
 scan(ParentPid, [], _, _, MyTotal, CollectorPid) ->
     et_collector:report_event(CollectorPid, 80, ParentPid, self(), "At the leaf", [{action, null}, {left_total, MyTotal}, {my_total, MyTotal}, {acc, null}]),
@@ -56,7 +62,6 @@ scan(ParentPid, [], _, _, MyTotal, CollectorPid) ->
             GrandTotal
     end;
 scan(Parent, [ChildHd | ChildTl], CombineFun, AccIn, LeftTotal, CollectorPid) ->
-    et_collector:report_event(CollectorPid, 80, Parent, self(), "Inside tree going down", [{action, null}, {left_total, LeftTotal}, {my_total, LeftTotal}, {acc, AccIn}]),
     receive
         {ChildHd, send_up, RightTotal} -> 
             et_collector:report_event(CollectorPid, 80, ChildHd, self(), "Inside tree received data", [{action, send_up}, {left_total, LeftTotal}, {my_total, RightTotal}, {acc, AccIn}]),
