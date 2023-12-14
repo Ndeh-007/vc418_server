@@ -34,7 +34,7 @@ create(NProcs, Task)
   {RootPid, ProcTree}.
 
 create(1, Parent, MyIndex, ChildPids, Task, MasterPid) ->
-  MasterPid ! {proc_state, {Parent, self(), ChildPids, MyIndex}},
+  MasterPid ! {proc_state, {Parent, self(), ChildPids, MyIndex, MyIndex}},
   Task({Parent, ChildPids, MyIndex});
 create(N, Parent, MyIndex, ChildPids, Task, MasterPid) when is_integer(N), 1 < N ->
   NLeft = N div 2,
@@ -53,12 +53,13 @@ loop_create(Acc, NProcs) ->
   end.
 
 encoded_json_tree([], Acc) -> Acc;
-encoded_json_tree([{Parent, Self, Children, Index} | TreeListTl], Acc)->
+encoded_json_tree([{Parent, Self, Children, Index, Value} | TreeListTl], Acc)->
   Instance = [
     {<<"self">>, Self},
     {<<"parent">>, Parent},
     {<<"children">>, Children},
-    {<<"value">>, Index}
+    {<<"value">>, Value},
+    {<<"index">>, Index}
   ],
   encoded_json_tree(TreeListTl, [Instance | Acc]).
 

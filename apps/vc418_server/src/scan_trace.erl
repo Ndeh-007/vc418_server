@@ -54,17 +54,17 @@ scan(ProcInfo, CombineFun, AccIn, Value, CollectorPid) ->
 scan({_}, [], _, AccIn, _, _) -> 
     AccIn;
 scan(ParentPid, [], _, _, MyTotal, CollectorPid) ->
-    et_collector:report_event(CollectorPid, 80, ParentPid, self(), "At the leaf", [{action, null}, {left_total, MyTotal}, {my_total, MyTotal}, {acc, null}]),
+    et_collector:report_event(CollectorPid, 80, ParentPid, self(), "At the leaf", [{action, null}, {left_total, MyTotal}, {my_total, MyTotal}, {acc, null}, {step_value, MyTotal}, {value, MyTotal}]),
     ParentPid ! {self(), send_up, MyTotal},
     receive 
         {ParentPid, send_down, GrandTotal} ->
-            et_collector:report_event(CollectorPid, 80, self(), ParentPid, "At the leaf, received data from parent with action", [{action, send_down}, {left_total, MyTotal}, {my_total, MyTotal}, {acc, GrandTotal}]),
+            et_collector:report_event(CollectorPid, 80, self(), ParentPid, "At the leaf, received data from parent with action", [{action, send_down}, {left_total, MyTotal}, {my_total, MyTotal}, {acc, GrandTotal},  {step_value, GrandTotal}, {value, GrandTotal}]),
             GrandTotal
     end;
 scan(Parent, [ChildHd | ChildTl], CombineFun, AccIn, LeftTotal, CollectorPid) ->
     receive
         {ChildHd, send_up, RightTotal} -> 
-            et_collector:report_event(CollectorPid, 80, ChildHd, self(), "Inside tree received data", [{action, send_up}, {left_total, LeftTotal}, {my_total, RightTotal}, {acc, AccIn}]),
+            et_collector:report_event(CollectorPid, 80, ChildHd, self(), "Inside tree received data", [{action, send_up}, {left_total, LeftTotal}, {my_total, RightTotal}, {acc, AccIn}, {step_value, CombineFun(LeftTotal, RightTotal)}, {value, LeftTotal}]),
             GrandTotal = scan(Parent, ChildTl, CombineFun, AccIn, CombineFun(LeftTotal,RightTotal), CollectorPid),
             ChildHd ! {self(), send_down, CombineFun(LeftTotal, GrandTotal)},
             GrandTotal

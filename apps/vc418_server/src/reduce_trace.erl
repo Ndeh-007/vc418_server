@@ -66,12 +66,12 @@ reduce({_}, [], _, GrandTotal, _) ->
     GrandTotal;
 reduce(ParentPid, [], _, MyTotal, CollectorPid) ->
     % signal that we are at the leaves of each tree
-    et_collector:report_event(CollectorPid, 80, ParentPid, self(), "At the leaf", [{action, null}, {value, MyTotal}]),
+    et_collector:report_event(CollectorPid, 80, ParentPid, self(), "At the leaf", [{action, null}, {value, MyTotal}, {step_value, MyTotal}]),
     ParentPid ! {self(), reduce_up, MyTotal},
     receive
         {ParentPid, reduce_down, GrandTotal} ->
             % signal that at the leaves we have received a value from our parent
-            et_collector:report_event(CollectorPid, 80, ParentPid, self(), "At the leaf, receive from parent, grand total", [{action, reduce_down}, {value, GrandTotal}]),
+            et_collector:report_event(CollectorPid, 80, ParentPid, self(), "At the leaf, receive from parent, grand total", [{action, reduce_down}, {value, GrandTotal}, {step_value, GrandTotal}]),
             GrandTotal
     end;
 reduce(Parent, [ChildHd | ChildTl], CombineFun, LeftTotal, CollectorPid) ->
@@ -79,7 +79,7 @@ reduce(Parent, [ChildHd | ChildTl], CombineFun, LeftTotal, CollectorPid) ->
     receive
         {ChildHd, reduce_up, RightTotal} ->
             % signal that we have received data from a child
-            et_collector:report_event(CollectorPid, 80, ChildHd, self(), "At node, receive right total from child", [{action, null}, {value, RightTotal}]),
+            et_collector:report_event(CollectorPid, 80, ChildHd, self(), "At node, receive right total from child", [{action, null}, {value, RightTotal}, {step_value, CombineFun(LeftTotal, RightTotal)}]),
             GrandTotal = reduce(Parent, ChildTl, CombineFun, CombineFun(LeftTotal, RightTotal), CollectorPid),
             
             % signal that we have sent data to a child
