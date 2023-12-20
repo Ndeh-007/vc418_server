@@ -12,7 +12,7 @@
 start(_StartType, _StartArgs) ->
     Dispatch = cowboy_router:compile([
         {
-            <<"localhost">>,
+            '_',
             [
                 { <<"/">>, hello_handler, [] },
                 { <<"/reduce">>, reduce_handler,[]},
